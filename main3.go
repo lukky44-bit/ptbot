@@ -34,7 +34,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🔐 Admission control (VU-based)
+	// 🔐 Admission control
 	mu.Lock()
 	if currentVUs+req.VUs > maxVUs {
 		mu.Unlock()
@@ -42,14 +42,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentVUs += req.VUs
-	fmt.Println("Allocated VUs:", req.VUs, " | Current VUs:", currentVUs)
+	fmt.Println("Allocated VUs:", req.VUs, "| Current VUs:", currentVUs)
 	mu.Unlock()
 
 	// 🔄 Release VUs after completion
 	defer func() {
 		mu.Lock()
 		currentVUs -= req.VUs
-		fmt.Println("Released VUs:", req.VUs, " | Current VUs:", currentVUs)
+		fmt.Println("Released VUs:", req.VUs, "| Current VUs:", currentVUs)
 		mu.Unlock()
 	}()
 
@@ -64,7 +64,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start k6 process
+	// Start k6
 	cmd := exec.Command("k6", "run", "-")
 
 	stdout, err := cmd.StdoutPipe()
@@ -85,40 +85,61 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send script to k6
+	// Send script
 	go func() {
 		defer stdin.Close()
 		stdin.Write([]byte(req.Script))
 	}()
 
-	// Start process
 	if err := cmd.Start(); err != nil {
 		http.Error(w, "Failed to start k6", 500)
 		return
 	}
 
+	var wg sync.WaitGroup
+
 	// Stream stdout
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			fmt.Fprintf(w, "data: %s\n\n", scanner.Text())
+			line := scanner.Text()
+
+			// 🔥 Print to container logs
+			fmt.Println("[K6]", line)
+
+			// 🔥 Send to client
+			fmt.Fprintf(w, "data: %s\n\n", line)
 			flusher.Flush()
 		}
 	}()
 
 	// Stream stderr
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			fmt.Fprintf(w, "data: ERROR: %s\n\n", scanner.Text())
+			line := scanner.Text()
+
+			// 🔥 Print to container logs
+			fmt.Println("[K6 ERROR]", line)
+
+			// 🔥 Send to client
+			fmt.Fprintf(w, "data: ERROR: %s\n\n", line)
 			flusher.Flush()
 		}
 	}()
 
-	// Wait for completion
+	// Wait for process
 	cmd.Wait()
 
-	// Final message
+	// Wait for streams
+	wg.Wait()
+
+	fmt.Println("TEST COMPLETED")
+
 	fmt.Fprintf(w, "data: TEST COMPLETED\n\n")
 	flusher.Flush()
 }
