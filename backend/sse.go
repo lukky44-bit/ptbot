@@ -1,14 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -40,8 +39,7 @@ func handleRunTest(logChan chan StreamMessage, metricChan chan StreamMessage) ht
 			return
 		}
 
-		logFilePath := filepath.Join("results", fmt.Sprintf("%s.txt", sanitizeRunID(req.RunID)))
-		if err := createRun(req.RunID, logFilePath); err != nil {
+		if err := createRun(req.RunID); err != nil {
 			http.Error(w, fmt.Sprintf("failed to create run metadata: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -129,6 +127,14 @@ func handleRunTest(logChan chan StreamMessage, metricChan chan StreamMessage) ht
 				flusher.Flush()
 				break
 			}
+		}
+
+
+		if err := saveRunLogFile(req.RunID); err != nil {
+			fmt.Fprintf(w, "data: [ERROR] failed to save log file: %s\n\n", err.Error())
+			flusher.Flush()
+			updateRunStatus(req.RunID, "completed_with_log_error")
+			return
 		}
 
 		updateRunStatus(req.RunID, "completed")

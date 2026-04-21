@@ -13,8 +13,8 @@ func main() {
 	initDB()
 
 	// Channels
-	logChan := make(chan StreamMessage, 100)
-	metricChan := make(chan StreamMessage, 100)
+	logChan := make(chan StreamMessage)
+	metricChan := make(chan StreamMessage)
 
 	// Start workers
 	go startFileWriter(logChan)

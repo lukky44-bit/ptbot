@@ -16,13 +16,13 @@ type StreamMessage struct {
 }
 
 type Run struct {
-	RunID        string    `bson:"run_id" json:"run_id"`
-	LogFilePath  string    `bson:"log_file_path" json:"log_file_path"`
-	Status       string    `bson:"status" json:"status"`
-	StartTime    time.Time `bson:"start_time" json:"start_time"`
-	EndTime      time.Time `bson:"end_time,omitempty" json:"end_time,omitempty"`
-	CreatedAt    time.Time `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time `bson:"updated_at" json:"updated_at"`
+	RunID          string    `bson:"run_id" json:"run_id"`
+	LogFileContent []byte    `bson:"log_file_content,omitempty" json:"-"`
+	Status         string    `bson:"status" json:"status"`
+	StartTime      time.Time `bson:"start_time" json:"start_time"`
+	EndTime        time.Time `bson:"end_time,omitempty" json:"end_time,omitempty"`
+	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `bson:"updated_at" json:"updated_at"`
 }
 
 type Metric struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -59,7 +60,7 @@ func saveMetric(metric Metric) {
 	}
 }
 
-func createRun(runID, logFilePath string) error {
+func createRun(runID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -72,9 +73,8 @@ func createRun(runID, logFilePath string) error {
 			"metrics":    bson.A{},
 		},
 		"$set": bson.M{
-			"log_file_path": logFilePath,
-			"status":        "started",
-			"updated_at":    time.Now(),
+			"status":     "started",
+			"updated_at":  time.Now(),
 		},
 	}
 
@@ -84,6 +84,40 @@ func createRun(runID, logFilePath string) error {
 		fmt.Println("createRun error:", err)
 	}
 	return err
+}
+
+func saveRunLogFile(runID string) error {
+	fileName := sanitizeRunID(runID)
+	if fileName == "" {
+		fileName = "run_unknown"
+	}
+
+	filePath := filepath.Join("results", fmt.Sprintf("%s.txt", fileName))
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"run_id": runID}
+	update := bson.M{
+		"$set": bson.M{
+			"log_file_content": content,
+			"updated_at":       time.Now(),
+		},
+	}
+
+	if _, err := collection.UpdateOne(ctx, filter, update); err != nil {
+		return err
+	}
+
+	if err := os.Remove(filePath); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func updateRunStatus(runID, status string) error {
