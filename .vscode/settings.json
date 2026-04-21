@@ -1,0 +1,4 @@
+{
+  "editor.multiCursorModifier": "alt",
+  "go.useLanguageServer": true
+}
