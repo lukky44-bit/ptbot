@@ -60,7 +60,7 @@ func saveMetric(metric Metric) {
 	}
 }
 
-func createRun(runID string) error {
+func createRun(runID string) error {// this function creates a new run document in the database with the given runID. It uses an upsert operation to ensure that if a document with the same runID already exists, it won't create a duplicate but will update the existing one instead.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

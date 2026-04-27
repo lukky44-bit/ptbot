@@ -75,7 +75,7 @@ func handleRunTestWithWorkflow(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 
 		// Check if workflow is done
-		if status != "RUNNING" {
+		if status != "Running" {
 			if status == "COMPLETED" {
 				fmt.Fprintf(w, "data: Workflow completed successfully\n\n")
 				flusher.Flush()

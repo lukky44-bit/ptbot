@@ -33,7 +33,6 @@ func main() {
 	// Start HTTP server in goroutine
 	go func() {
 		http.HandleFunc("/run-test", handleRunTestWithWorkflow)
-		http.HandleFunc("/health", handleHealth)
 
 		port := os.Getenv("BACKEND_PORT")
 		if port == "" {
@@ -51,16 +50,4 @@ func main() {
 	fmt.Println("Shutting down...")
 	StopTemporalWorker()
 	fmt.Println("Backend stopped")
-}
-
-// handleHealth is a simple health check endpoint
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"status": "healthy"}`)
 }
