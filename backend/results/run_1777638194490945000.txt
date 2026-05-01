@@ -1,0 +1,145 @@
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT]          /\      Grafana   /‾‾/
+[run_1777638194490945000] [stdout] [STDOUT]     /\  /  \     |\  __   /  /
+[run_1777638194490945000] [stdout] [STDOUT]    /  \/    \    | |/ /  /   ‾‾\
+[run_1777638194490945000] [stdout] [STDOUT]   /          \   |   (  |  (‾)  |
+[run_1777638194490945000] [stdout] [STDOUT]  / __________ \  |_|\_\  \_____/
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT]      execution: local
+[run_1777638194490945000] [stdout] [STDOUT]         script: -
+[run_1777638194490945000] [stdout] [STDOUT]         output: Prometheus remote write (http://prometheus:9090/api/v1/write)
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT]      scenarios: (100.00%) 1 scenario, 10 max VUs, 1m30s max duration (incl. graceful stop):
+[run_1777638194490945000] [stdout] [STDOUT]               * default: 10 looping VUs for 1m0s (gracefulStop: 30s)
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stderr] [STDERR] time="2026-05-01T12:23:14Z" level=warning msg="Error from API server" error="listen tcp 127.0.0.1:6565: bind: address already in use"
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m01.0s), 10/10 VUs, 0 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [   2% ] 10 VUs  0m01.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m02.0s), 10/10 VUs, 8 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [   3% ] 10 VUs  0m02.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m03.0s), 10/10 VUs, 10 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [   5% ] 10 VUs  0m03.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m04.0s), 10/10 VUs, 20 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [   7% ] 10 VUs  0m04.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m05.0s), 10/10 VUs, 30 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [   8% ] 10 VUs  0m05.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m06.0s), 10/10 VUs, 38 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  10% ] 10 VUs  0m06.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m07.0s), 10/10 VUs, 48 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  12% ] 10 VUs  0m07.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m08.0s), 10/10 VUs, 50 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  13% ] 10 VUs  0m08.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m09.0s), 10/10 VUs, 60 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  15% ] 10 VUs  0m09.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m10.0s), 10/10 VUs, 68 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  17% ] 10 VUs  0m10.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m11.0s), 10/10 VUs, 78 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  18% ] 10 VUs  0m11.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m12.0s), 10/10 VUs, 88 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  20% ] 10 VUs  0m12.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m13.0s), 10/10 VUs, 90 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  22% ] 10 VUs  0m13.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m14.0s), 10/10 VUs, 98 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  23% ] 10 VUs  0m14.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m15.0s), 10/10 VUs, 108 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  25% ] 10 VUs  0m15.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m16.0s), 10/10 VUs, 118 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  27% ] 10 VUs  0m16.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m17.0s), 10/10 VUs, 128 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  28% ] 10 VUs  0m17.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m18.0s), 10/10 VUs, 129 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  30% ] 10 VUs  0m18.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m19.0s), 10/10 VUs, 138 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  32% ] 10 VUs  0m19.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m20.0s), 10/10 VUs, 148 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  33% ] 10 VUs  0m20.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m21.0s), 10/10 VUs, 157 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  35% ] 10 VUs  0m21.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m22.0s), 10/10 VUs, 164 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  37% ] 10 VUs  0m22.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m23.0s), 10/10 VUs, 170 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  38% ] 10 VUs  0m23.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m24.0s), 10/10 VUs, 178 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  40% ] 10 VUs  0m24.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m25.0s), 10/10 VUs, 187 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  42% ] 10 VUs  0m25.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m26.0s), 10/10 VUs, 196 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  43% ] 10 VUs  0m26.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m27.0s), 10/10 VUs, 204 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  45% ] 10 VUs  0m27.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m28.0s), 10/10 VUs, 210 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  47% ] 10 VUs  0m28.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m29.0s), 10/10 VUs, 216 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  48% ] 10 VUs  0m29.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m30.0s), 10/10 VUs, 226 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  50% ] 10 VUs  0m30.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m31.0s), 10/10 VUs, 236 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  52% ] 10 VUs  0m31.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m32.0s), 10/10 VUs, 244 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  53% ] 10 VUs  0m32.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m33.0s), 10/10 VUs, 248 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  55% ] 10 VUs  0m33.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m34.0s), 10/10 VUs, 256 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  57% ] 10 VUs  0m34.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m35.0s), 10/10 VUs, 266 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  58% ] 10 VUs  0m35.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m36.0s), 10/10 VUs, 275 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  60% ] 10 VUs  0m36.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m37.0s), 10/10 VUs, 282 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  62% ] 10 VUs  0m37.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m38.0s), 10/10 VUs, 288 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  63% ] 10 VUs  0m38.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m39.0s), 10/10 VUs, 296 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  65% ] 10 VUs  0m39.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m40.0s), 10/10 VUs, 305 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  67% ] 10 VUs  0m40.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m41.0s), 10/10 VUs, 314 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  68% ] 10 VUs  0m41.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m42.0s), 10/10 VUs, 322 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  70% ] 10 VUs  0m42.0s/1m0s
+[run_1777638194490945000] [stdout] [STDOUT]
+[run_1777638194490945000] [stdout] [STDOUT] running (0m43.0s), 10/10 VUs, 328 complete and 0 interrupted iterations
+[run_1777638194490945000] [stdout] [STDOUT] default   [  72% ] 10 VUs  0m43.0s/1m0s
