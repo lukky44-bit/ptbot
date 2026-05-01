@@ -21,12 +21,12 @@ var summaryMetricLine = regexp.MustCompile(`^(?:[✓✗]\s*)?([a-zA-Z_][a-zA-Z0-
 var thresholdHeaderLine = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\s*$`)
 var thresholdRuleLine = regexp.MustCompile(`^[✓✗]\s*'([^']+)'\s+(.+)$`)
 
-// ActivityCreateRun creates/initializes a run document in MongoDB
-func ActivityCreateRun(ctx context.Context, runID string) error {
+// ActivityCreateRun creates/initializes a run document in PostgreSQL
+func ActivityCreateRun(ctx context.Context, runID string, vus int, script string) error {
 	logger := activity.GetLogger(ctx)
-	logger.Info("Creating run record", "runID", runID)
+	logger.Info("Creating run record", "runID", runID, "vus", vus)
 
-	if err := createRun(runID); err != nil {
+	if err := createRun(ctx, runID, vus, script); err != nil {
 		logger.Error("Failed to create run record", "runID", runID, "error", err)
 		return err
 	}
@@ -90,6 +90,8 @@ type StreamChunk struct {
 func ActivityProcessStream(ctx context.Context, req RunRequest, runnerURL string) ([]StreamChunk, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Processing stream from runner", "runID", req.RunID)
+	metricStop := make(chan struct{})
+	defer close(metricStop)
 
 	fileName := sanitizeRunID(req.RunID)
 	if fileName == "" {
@@ -147,6 +149,8 @@ func ActivityProcessStream(ctx context.Context, req RunRequest, runnerURL string
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 
+	go pollPrometheusMetrics(ctx, req.RunID, metricStop)
+
 	var chunks []StreamChunk
 	reader := bufio.NewReader(resp.Body)
 
@@ -184,6 +188,9 @@ func ActivityProcessStream(ctx context.Context, req RunRequest, runnerURL string
 						Stream:  stream,
 					}
 					chunks = append(chunks, chunk)
+
+					// We write raw stream lines to the log file only.
+					// Numeric time-series samples are collected separately from Prometheus.
 				}
 			}
 		}
@@ -199,6 +206,33 @@ func ActivityProcessStream(ctx context.Context, req RunRequest, runnerURL string
 
 	logger.Info("Stream processing completed", "chunksReceived", len(chunks))
 	return chunks, nil
+}
+
+func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct{}) {
+	logger := activity.GetLogger(ctx)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stop:
+			return
+		case <-ticker.C:
+			metrics, err := fetchPrometheusMetrics(ctx, runID)
+			if err != nil {
+				logger.Warn("Failed to fetch Prometheus metrics", "runID", runID, "error", err)
+				continue
+			}
+
+			for _, metric := range metrics {
+				if err := saveMetric(ctx, metric); err != nil {
+					logger.Warn("Failed to save Prometheus metric", "name", metric.Name, "error", err)
+				}
+			}
+		}
+	}
 }
 
 // ActivityWriteToLogFile writes stream chunks to the temporary log file
@@ -349,25 +383,33 @@ func parseMetricMessageFromLine(message string, runID string, stream string) (Me
 	return Metric{}, false
 }
 
-// ActivitySaveMetricsToDb saves all extracted metrics to MongoDB
+// ActivitySaveMetricsToDb saves all extracted metrics to PostgreSQL
 func ActivitySaveMetricsToDb(ctx context.Context, metrics []Metric) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Saving metrics to database", "count", len(metrics))
 
+	summaryPayload := make(map[string]interface{})
 	for _, metric := range metrics {
-		saveMetric(metric)
+		summaryPayload[metric.Name] = metric.Value
+	}
+
+	if len(summaryPayload) > 0 {
+		runID := metrics[0].RunID
+		if err := saveSummaryMetric(ctx, runID, summaryPayload); err != nil {
+			logger.Warn("Failed to save summary metrics payload", "error", err)
+		}
 	}
 
 	logger.Info("All metrics saved to database")
 	return nil
 }
 
-// ActivitySaveRunLogFile saves the complete log file content to the database
+// ActivitySaveRunLogFile saves the complete log file content to the PostgreSQL database
 func ActivitySaveRunLogFile(ctx context.Context, runID string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Saving run log file to database", "runID", runID)
 
-	if err := saveRunLogFile(runID); err != nil {
+	if err := saveRunLogFile(ctx, runID); err != nil {
 		logger.Error("Failed to save run log file", "runID", runID, "error", err)
 		return err
 	}
@@ -376,12 +418,12 @@ func ActivitySaveRunLogFile(ctx context.Context, runID string) error {
 	return nil
 }
 
-// ActivityUpdateRunStatus updates the run status in the database
+// ActivityUpdateRunStatus updates the run status in the PostgreSQL database
 func ActivityUpdateRunStatus(ctx context.Context, runID string, status string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Updating run status", "runID", runID, "status", status)
 
-	updateRunStatus(runID, status)
+	updateRunStatus(ctx, runID, status)
 	logger.Info("Run status updated", "runID", runID, "status", status)
 	return nil
 }

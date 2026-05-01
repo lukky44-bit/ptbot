@@ -25,7 +25,7 @@ func LoadTestWorkflow(ctx workflow.Context, req RunRequest) (string, error) {
 	// Step 1: Create Run Record in Database
 	// ============================================
 	logger.Info("Step 1: Creating run record", "runID", req.RunID)
-	err := workflow.ExecuteActivity(ctx, ActivityCreateRun, req.RunID).Get(ctx, nil)
+	err := workflow.ExecuteActivity(ctx, ActivityCreateRun, req.RunID, req.VUs, req.Script).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to create run record", "error", err)
 		return "", err

@@ -10,14 +10,19 @@ services:
     networks:
       - k6net
 
-  mongodb:
-    image: mongo:7.0
-    container_name: mongodb
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: postgres
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: loadtest
+      TIMESCALEDB_TELEMETRY: "off"
     volumes:
-      - mongo-data:/data/db
+      - postgres-data:/var/lib/postgresql
     networks:
       - k6net
 
@@ -57,7 +62,7 @@ services:
       - k6net
 
 volumes:
-  mongo-data:
+  postgres-data:
   prometheus-data:
   grafana-data:
 

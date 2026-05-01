@@ -16,20 +16,20 @@ type StreamMessage struct {
 }
 
 type Run struct {
-	RunID          string    `bson:"run_id" json:"run_id"`
-	LogFileContent []byte    `bson:"log_file_content,omitempty" json:"-"`
-	Status         string    `bson:"status" json:"status"`
-	StartTime      time.Time `bson:"start_time" json:"start_time"`
-	EndTime        time.Time `bson:"end_time,omitempty" json:"end_time,omitempty"`
-	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
-	UpdatedAt      time.Time `bson:"updated_at" json:"updated_at"`
+	RunID          string    `json:"run_id"`
+	LogFileContent []byte    `json:"-"`
+	Status         string    `json:"status"`
+	StartTime      time.Time `json:"start_time"`
+	EndTime        time.Time `json:"end_time,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type Metric struct {
-	RunID     string    `bson:"run_id" json:"run_id"`
-	Name      string    `bson:"name" json:"name"`
-	Value     string    `bson:"value" json:"value"`
-	Stream    string    `bson:"stream" json:"stream"`
-	Raw       string    `bson:"raw" json:"raw"`
-	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	RunID     string    `json:"run_id"`
+	Name      string    `json:"name"`
+	Value     string    `json:"value"`
+	Stream    string    `json:"stream"`
+	Raw       string    `json:"raw"`
+	CreatedAt time.Time `json:"created_at"`
 }

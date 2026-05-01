@@ -55,7 +55,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({__name__=~\"k6_http_req_failed(_total)?\", test_run_id=~\"$test_run_id\"}[1m]))",
+          "expr": "max(k6_http_req_failed_rate{test_run_id=~\"$test_run_id\"})",
           "legendFormat": "http_failed/s"
         }
       ]
@@ -69,7 +69,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * (sum(rate({__name__=~\"k6_http_req_failed(_total)?\", test_run_id=~\"$test_run_id\"}[1m])) / clamp_min(sum(rate({__name__=~\"k6_http_reqs(_total)?\", test_run_id=~\"$test_run_id\"}[1m])), 1e-9))",
+          "expr": "100 * max(k6_http_req_failed_rate{test_run_id=~\"$test_run_id\"})",
           "legendFormat": "failed %"
         }
       ]
@@ -117,7 +117,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({__name__=~\"k6_checks(_total)?\", test_run_id=~\"$test_run_id\"}[1m]))",
+          "expr": "max(k6_checks_rate{test_run_id=~\"$test_run_id\"})",
           "legendFormat": "checks/s"
         }
       ]
@@ -131,7 +131,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * (sum(rate({__name__=~\"k6_checks(_total)?\", test_run_id=~\"$test_run_id\", check=~\"pass|passed|true\"}[1m])) / clamp_min(sum(rate({__name__=~\"k6_checks(_total)?\", test_run_id=~\"$test_run_id\"}[1m])), 1e-9))",
+          "expr": "100 * max(k6_checks_rate{test_run_id=~\"$test_run_id\"})",
           "legendFormat": "check pass %"
         }
       ]
@@ -173,22 +173,22 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate({__name__=~\"k6_http_req_duration(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
+          "expr": "k6_http_req_duration_p50{test_run_id=~\"$test_run_id\"}",
           "legendFormat": "p50"
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.90, sum by (le) (rate({__name__=~\"k6_http_req_duration(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
+          "expr": "k6_http_req_duration_p90{test_run_id=~\"$test_run_id\"}",
           "legendFormat": "p90"
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_duration(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
+          "expr": "k6_http_req_duration_p95{test_run_id=~\"$test_run_id\"}",
           "legendFormat": "p95"
         },
         {
           "refId": "D",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate({__name__=~\"k6_http_req_duration(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
+          "expr": "k6_http_req_duration_p99{test_run_id=~\"$test_run_id\"}",
           "legendFormat": "p99"
         }
       ]
@@ -196,112 +196,112 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Iteration Duration p95",
+      "title": "Iteration Duration p99",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 32 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_iteration_duration(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "iter p95"
+          "expr": "k6_iteration_duration_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "iter p99"
         }
       ]
     },
     {
       "id": 13,
       "type": "timeseries",
-      "title": "HTTP Blocked p95",
+      "title": "HTTP Blocked p99",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 32 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_blocked(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "blocked p95"
+          "expr": "k6_http_req_blocked_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "blocked p99"
         }
       ]
     },
     {
       "id": 14,
       "type": "timeseries",
-      "title": "HTTP Connecting p95",
+      "title": "HTTP Connecting p99",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 32 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_connecting(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "connecting p95"
+          "expr": "k6_http_req_connecting_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "connecting p99"
         }
       ]
     },
     {
       "id": 15,
       "type": "timeseries",
-      "title": "HTTP TLS Handshaking p95",
+      "title": "HTTP TLS Handshaking p99",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 40 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_tls_handshaking(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "tls p95"
+          "expr": "k6_http_req_tls_handshaking_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "tls p99"
         }
       ]
     },
     {
       "id": 16,
       "type": "timeseries",
-      "title": "HTTP Sending p95",
+      "title": "HTTP Sending p99",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 40 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_sending(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "sending p95"
+          "expr": "k6_http_req_sending_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "sending p99"
         }
       ]
     },
     {
       "id": 17,
       "type": "timeseries",
-      "title": "HTTP Waiting p95",
+      "title": "HTTP Waiting p99",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 40 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_waiting(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "waiting p95"
+          "expr": "k6_http_req_waiting_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "waiting p99"
         }
       ]
     },
     {
       "id": 18,
       "type": "timeseries",
-      "title": "HTTP Receiving p95",
+      "title": "HTTP Receiving p99",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 48 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"k6_http_req_receiving(_seconds)?_bucket\", test_run_id=~\"$test_run_id\"}[1m])))",
-          "legendFormat": "receiving p95"
+          "expr": "k6_http_req_receiving_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "receiving p99"
         }
       ]
     },
     {
       "id": 19,
       "type": "timeseries",
-      "title": "HTTP Req Duration Mean",
+      "title": "HTTP Req Duration p99",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 48 },
       "datasource": "Prometheus",
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({__name__=~\"k6_http_req_duration(_seconds)?_sum\", test_run_id=~\"$test_run_id\"}[1m])) / clamp_min(sum(rate({__name__=~\"k6_http_req_duration(_seconds)?_count\", test_run_id=~\"$test_run_id\"}[1m])), 1e-9)",
-          "legendFormat": "mean"
+          "expr": "k6_http_req_duration_p99{test_run_id=~\"$test_run_id\"}",
+          "legendFormat": "p99"
         }
       ]
     },
