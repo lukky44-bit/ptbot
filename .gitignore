@@ -1,0 +1,16 @@
+# Build artifacts
+backend/backend
+runner/app
+
+# Go build outputs
+**/bin
+**/*.exe
+**/*.out
+
+# Local env and editor metadata
+.DS_Store
+.vscode/
+
+# Runtime results and logs
+backend/results/*
+!backend/results/.gitkeep

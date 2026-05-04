@@ -1,4 +1,29 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ptbot-backend
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - prometheus
+      - runner
+      - temporal
+    environment:
+      - BACKEND_PORT=8081
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=loadtest
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RUNNER_URL=http://runner:8080/run-test
+      - PROMETHEUS_URL=http://prometheus:9090
+      - TEMPORAL_SERVICE_ADDRESS=temporal:7233
+    networks:
+      - k6net
+
   runner:
     build:
       context: ./runner
@@ -7,6 +32,24 @@ services:
       - "8080:8080"
     depends_on:
       - prometheus
+    networks:
+      - k6net
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: temporal
+    ports:
+      - "7233:7233"
+      - "8088:8088"
+    environment:
+      - TEMPORAL_DB=postgresql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=loadtest
+    depends_on:
+      - postgres
     networks:
       - k6net
 

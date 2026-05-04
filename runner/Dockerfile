@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN go build -o app main3.go
+RUN go build -o app ./cmd/runner
 
 COPY --from=k6bin /usr/bin/k6 /usr/local/bin/k6
 
