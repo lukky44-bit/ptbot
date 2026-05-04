@@ -1,3 +1,5 @@
+// Package main provides the backend HTTP server for the load testing orchestration system.
+// It implements service health checks, graceful shutdown, and SSE-based workflow status streaming.
 package main
 
 import (
@@ -15,6 +17,7 @@ import (
 	"backend/internal/worker"
 )
 
+// ServiceKind defines the type of service to check (database, HTTP, or TCP).
 type ServiceKind string
 
 const (
@@ -23,28 +26,38 @@ const (
 	ServiceTCP  ServiceKind = "tcp"
 )
 
+// Service represents a critical service with health check configuration.
 type Service struct {
-	Name      string
-	URL       string
-	Kind      ServiceKind
-	Timeout   time.Duration
-	Retries   int
-	RetryWait time.Duration
+	Name      string        // Human-readable service name
+	URL       string        // Service endpoint URL or address
+	Kind      ServiceKind   // Type of health check (DB, HTTP, or TCP)
+	Timeout   time.Duration // Timeout for individual health check attempts
+	Retries   int           // Number of retry attempts before failure
+	RetryWait time.Duration // Wait duration between retry attempts
 }
 
 var services = []Service{
-	{Name: "PostgreSQL", URL: "postgres:5432", Kind: ServiceDB, Timeout: 5 * time.Second, Retries: 5, RetryWait: 2 * time.Second},
-	{Name: "Temporal Server", URL: "temporal:7233", Kind: ServiceTCP, Timeout: 5 * time.Second, Retries: 5, RetryWait: 2 * time.Second},
-	{Name: "Prometheus", URL: "http://prometheus:9090/-/healthy", Kind: ServiceHTTP, Timeout: 5 * time.Second, Retries: 3, RetryWait: 1 * time.Second},
-	{Name: "Runner Service", URL: "runner:8080", Kind: ServiceTCP, Timeout: 5 * time.Second, Retries: 3, RetryWait: 1 * time.Second},
+	{Name: "PostgreSQL", URL: envOrDefault("DB_HOST", "localhost") + ":" + envOrDefault("DB_PORT", "5432"), Kind: ServiceDB, Timeout: 5 * time.Second, Retries: 5, RetryWait: 2 * time.Second},
+	{Name: "Temporal Server", URL: envOrDefault("TEMPORAL_SERVICE_ADDRESS", "localhost:7233"), Kind: ServiceTCP, Timeout: 5 * time.Second, Retries: 5, RetryWait: 2 * time.Second},
+	{Name: "Prometheus", URL: envOrDefault("PROMETHEUS_HEALTH_URL", "http://localhost:9090/-/healthy"), Kind: ServiceHTTP, Timeout: 5 * time.Second, Retries: 3, RetryWait: 1 * time.Second},
+	{Name: "Runner Service", URL: envOrDefault("RUNNER_HEALTH_ADDR", "localhost:8080"), Kind: ServiceTCP, Timeout: 5 * time.Second, Retries: 3, RetryWait: 1 * time.Second},
 }
 
 var (
-	healthCheckMutex sync.Mutex
-	shutdownOnce     sync.Once
-	shutdownChan     = make(chan struct{})
+	shutdownOnce sync.Once
+	shutdownChan = make(chan struct{})
 )
 
+// envOrDefault retrieves an environment variable or returns a fallback value.
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+// checkServiceHealth verifies the health status of a service based on its kind.
+// Returns true if the service is healthy, false otherwise.
 func checkServiceHealth(service Service) bool {
 	switch service.Kind {
 	case ServiceDB:
@@ -71,6 +84,8 @@ func checkServiceHealth(service Service) bool {
 	}
 }
 
+// waitForServices performs health checks on all critical services with retry logic.
+// Returns an error if any service fails to become healthy within the retry limit.
 func waitForServices() error {
 	fmt.Println("Checking critical services...")
 
@@ -97,6 +112,8 @@ func waitForServices() error {
 	return nil
 }
 
+// monitorServices continuously monitors service health and triggers graceful shutdown
+// if any critical service becomes unavailable.
 func monitorServices() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -107,31 +124,32 @@ func monitorServices() {
 			fmt.Println("Service monitor shutting down")
 			return
 		case <-ticker.C:
-			healthCheckMutex.Lock()
 			for _, service := range services {
 				if !checkServiceHealth(service) {
 					fmt.Printf("✗ CRITICAL: %s is no longer available. Shutting down backend...\n", service.Name)
-					healthCheckMutex.Unlock()
-					shutdownBackend()
+					shutdownBackend(1)
 					return
 				}
 			}
-			healthCheckMutex.Unlock()
 		}
 	}
 }
 
-func shutdownBackend() {
+// shutdownBackend performs graceful shutdown of the backend server.
+// Ensures cleanup happens only once using sync.Once pattern.
+func shutdownBackend(exitCode int) {
 	shutdownOnce.Do(func() {
 		fmt.Println("Initiating graceful shutdown...")
 		close(shutdownChan)
-		time.Sleep(1 * time.Second)
 		worker.StopTemporalWorker()
+		db.Close()
 		fmt.Println("Backend stopped")
-		os.Exit(1)
+		os.Exit(exitCode)
 	})
 }
 
+// main initializes the backend server with database and Temporal worker,
+// performs service health checks, and starts the HTTP server.
 func main() {
 	fmt.Println("Starting Backend with Temporal Workflow Engine...")
 
@@ -139,7 +157,6 @@ func main() {
 		fmt.Printf("Failed to initialize database: %v\n", err)
 		os.Exit(1)
 	}
-	defer db.Close()
 
 	if err := waitForServices(); err != nil {
 		fmt.Printf("✗ Failed to start: %v\n", err)
@@ -181,7 +198,5 @@ func main() {
 
 	<-sigChan
 	fmt.Println("Shutting down...")
-	close(shutdownChan)
-	worker.StopTemporalWorker()
-	fmt.Println("Backend stopped")
+	shutdownBackend(0)
 }

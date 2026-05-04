@@ -1,3 +1,5 @@
+// Package db provides database connection pooling, schema management, and data persistence operations.
+// It handles all interactions with the PostgreSQL/TimescaleDB database.
 package db
 
 import (
@@ -19,8 +21,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// pool is the global database connection pool.
 var pool *pgxpool.Pool
 
+// InitDB initializes the database connection pool with connection string from environment variables.
+// It retries the connection with exponential backoff and ensures the schema is initialized.
 func InitDB(ctx context.Context) error {
 	if pool != nil {
 		return nil
@@ -62,24 +67,109 @@ func InitDB(ctx context.Context) error {
 	config.MaxConns = 25
 	config.MinConns = 5
 
-	pool, err = pgxpool.NewWithConfig(ctx, config)
+	connPool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+	var pingErr error
+	for attempt := 1; attempt <= 15; attempt++ {
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		pingErr = connPool.Ping(pingCtx)
+		cancel()
+		if pingErr == nil {
+			pool = connPool
+			if err := ensureSchema(ctx); err != nil {
+				connPool.Close()
+				return fmt.Errorf("failed to ensure database schema: %w", err)
+			}
+			return nil
+		}
+
+		if attempt < 15 {
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	connPool.Close()
+	return fmt.Errorf("failed to ping database after retries: %w", pingErr)
+}
+
+// ensureSchema creates all necessary database tables, indexes, and Timescale hypertables.
+// It is idempotent and safe to call multiple times.
+func ensureSchema(ctx context.Context) error {
+	statements := []string{
+		`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
+		`CREATE TABLE IF NOT EXISTS test_runs (
+			id TEXT PRIMARY KEY,
+			vus INTEGER NOT NULL,
+			script TEXT NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'created',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			ended_at TIMESTAMP WITH TIME ZONE,
+			started_at TIMESTAMP WITH TIME ZONE
+		)`,
+		`CREATE TABLE IF NOT EXISTS realtime_metrics (
+			run_id TEXT NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+			name VARCHAR(255) NOT NULL,
+			value DOUBLE PRECISION NOT NULL,
+			ts TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			stream VARCHAR(50) DEFAULT 'stdout',
+			raw TEXT
+		)`,
+		`SELECT create_hypertable('realtime_metrics', 'ts', chunk_time_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
+		`ALTER TABLE realtime_metrics SET (timescaledb.compress = true)`,
+		`ALTER TABLE realtime_metrics SET (timescaledb.compress_segmentby = 'run_id,name')`,
+		`CREATE TABLE IF NOT EXISTS test_summaries (
+			id BIGSERIAL PRIMARY KEY,
+			run_id TEXT NOT NULL UNIQUE REFERENCES test_runs(id) ON DELETE CASCADE,
+			metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS test_logs (
+			id BIGSERIAL PRIMARY KEY,
+			run_id TEXT NOT NULL UNIQUE REFERENCES test_runs(id) ON DELETE CASCADE,
+			content TEXT,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return err
+		}
+	}
+
+	indexStatements := []string{
+		`CREATE INDEX IF NOT EXISTS idx_test_runs_created_at ON test_runs(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_test_runs_status ON test_runs(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_realtime_metrics_run_id ON realtime_metrics(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_realtime_metrics_run_id_ts ON realtime_metrics(run_id, ts DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_realtime_metrics_name ON realtime_metrics(name)`,
+		`CREATE INDEX IF NOT EXISTS idx_test_summaries_run_id ON test_summaries(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_test_logs_run_id ON test_logs(run_id)`,
+	}
+
+	for _, stmt := range indexStatements {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
+// Close closes the database connection pool.
 func Close() {
 	if pool != nil {
 		pool.Close()
 	}
 }
 
+// Ping checks if the database connection is healthy.
 func Ping(ctx context.Context) error {
 	if pool == nil {
 		return fmt.Errorf("database not initialized")
@@ -87,6 +177,7 @@ func Ping(ctx context.Context) error {
 	return pool.Ping(ctx)
 }
 
+// SaveMetric saves a single metric to the realtime_metrics table.
 func SaveMetric(ctx context.Context, metric model.Metric) error {
 	query := `
 		INSERT INTO realtime_metrics (run_id, name, value, ts, stream, raw)
@@ -115,11 +206,12 @@ func SaveMetric(ctx context.Context, metric model.Metric) error {
 		metric.Raw,
 	)
 	if err != nil {
-		fmt.Printf("saveMetric error: %v\n", err)
+		return fmt.Errorf("save metric: %w", err)
 	}
-	return err
+	return nil
 }
 
+// CreateRun creates a new test run record in the database.
 func CreateRun(ctx context.Context, runID string, vus int, script string) error {
 	query := `
 		INSERT INTO test_runs (id, vus, script, status, created_at, updated_at, started_at)
@@ -139,18 +231,19 @@ func CreateRun(ctx context.Context, runID string, vus int, script string) error 
 		now,
 	)
 	if err != nil {
-		fmt.Printf("CreateRun error: %v\n", err)
+		return fmt.Errorf("create run: %w", err)
 	}
-	return err
+	return nil
 }
 
+// SaveRunLogFile reads the log file from disk and saves it to the database, then deletes the local file.
 func SaveRunLogFile(ctx context.Context, runID string) error {
 	fileName := util.SanitizeRunID(runID)
 	if fileName == "" {
 		fileName = "run_unknown"
 	}
 
-	filePath := filepath.Join("results", fmt.Sprintf("%s.txt", fileName))
+	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -181,6 +274,7 @@ func SaveRunLogFile(ctx context.Context, runID string) error {
 	return nil
 }
 
+// UpdateRunStatus updates the status of a test run and sets the ended_at timestamp.
 func UpdateRunStatus(ctx context.Context, runID, status string) error {
 	query := `
 		UPDATE test_runs
@@ -191,11 +285,12 @@ func UpdateRunStatus(ctx context.Context, runID, status string) error {
 	now := time.Now()
 	_, err := pool.Exec(ctx, query, status, now, now, runID)
 	if err != nil {
-		fmt.Printf("UpdateRunStatus error: %v\n", err)
+		return fmt.Errorf("update run status: %w", err)
 	}
-	return err
+	return nil
 }
 
+// SaveSummaryMetric saves a JSON summary of all metrics for a test run.
 func SaveSummaryMetric(ctx context.Context, runID string, metrics map[string]interface{}) error {
 	payload, err := json.Marshal(metrics)
 	if err != nil {
@@ -212,11 +307,12 @@ func SaveSummaryMetric(ctx context.Context, runID string, metrics map[string]int
 	now := time.Now()
 	_, err = pool.Exec(ctx, query, runID, string(payload), now, now)
 	if err != nil {
-		fmt.Printf("SaveSummaryMetric error: %v\n", err)
+		return fmt.Errorf("save summary metric: %w", err)
 	}
-	return err
+	return nil
 }
 
+// FetchPrometheusMetrics queries Prometheus for metrics associated with a specific test run.
 func FetchPrometheusMetrics(ctx context.Context, runID string) ([]model.Metric, error) {
 	promURL := os.Getenv("PROMETHEUS_URL")
 	if promURL == "" {

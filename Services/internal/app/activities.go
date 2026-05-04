@@ -1,3 +1,5 @@
+// Package app defines Temporal activities and workflows for orchestrating load test execution.
+// Activities are the individual work units that get executed as part of a workflow.
 package app
 
 import (
@@ -21,10 +23,14 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
-var summaryMetricLine = regexp.MustCompile(`^(?:[✓✗]\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\.{2,}:\s*(.+)$`)
-var thresholdHeaderLine = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\s*$`)
-var thresholdRuleLine = regexp.MustCompile(`^[✓✗]\s*'([^']+)'\s+(.+)$`)
+// Regular expressions for parsing K6 test output and extracting metrics.
+var (
+	summaryMetricLine   = regexp.MustCompile(`^(?:[✓✗]\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\.{2,}:\s*(.+)$`)
+	thresholdHeaderLine = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\s*$`)
+	thresholdRuleLine   = regexp.MustCompile(`^[✓✗]\s*'([^']+)'\s+(.+)$`)
+)
 
+// ActivityCreateRun creates a new test run record in the database.
 func ActivityCreateRun(ctx context.Context, runID string, vus int, script string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Creating run record", "runID", runID, "vus", vus)
@@ -38,6 +44,7 @@ func ActivityCreateRun(ctx context.Context, runID string, vus int, script string
 	return nil
 }
 
+// ActivityCreateLogFile creates the log file for capturing test output.
 func ActivityCreateLogFile(ctx context.Context, runID string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Creating log file for run", "runID", runID)
@@ -47,12 +54,12 @@ func ActivityCreateLogFile(ctx context.Context, runID string) error {
 		fileName = "run_unknown"
 	}
 
-	if err := os.MkdirAll("results", 0755); err != nil {
+	if err := os.MkdirAll(util.ResultsDir(), 0755); err != nil {
 		logger.Error("Failed to create results directory", "error", err)
 		return err
 	}
 
-	filePath := filepath.Join("results", fmt.Sprintf("%s.txt", fileName))
+	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("Failed to create log file", "filePath", filePath, "error", err)
@@ -64,6 +71,7 @@ func ActivityCreateLogFile(ctx context.Context, runID string) error {
 	return nil
 }
 
+// ActivityCallRunner resolves the runner service URL from configuration or environment.
 func ActivityCallRunner(ctx context.Context, req model.RunRequest) (string, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Resolving runner URL", "runID", req.RunID, "vus", req.VUs)
@@ -80,6 +88,8 @@ func ActivityCallRunner(ctx context.Context, req model.RunRequest) (string, erro
 	return runnerURL, nil
 }
 
+// ActivityProcessStream calls the runner service, captures streaming output, and writes it to a log file.
+// It also polls Prometheus for metrics in parallel.
 func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL string) ([]model.StreamChunk, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Processing stream from runner", "runID", req.RunID)
@@ -92,12 +102,12 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 		fileName = "run_unknown"
 	}
 
-	if err := os.MkdirAll("results", 0755); err != nil {
+	if err := os.MkdirAll(util.ResultsDir(), 0755); err != nil {
 		logger.Error("Failed to ensure results directory", "error", err)
 		return nil, err
 	}
 
-	filePath := filepath.Join("results", fmt.Sprintf("%s.txt", fileName))
+	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
 	logFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("Failed to open log file for streaming writes", "filePath", filePath, "error", err)
@@ -199,6 +209,7 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 	return chunks, nil
 }
 
+// pollPrometheusMetrics periodically queries Prometheus for metrics and saves them to the database.
 func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct{}) {
 	logger := activity.GetLogger(ctx)
 	ticker := time.NewTicker(2 * time.Second)
@@ -226,6 +237,7 @@ func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct
 	}
 }
 
+// ActivityWriteToLogFile is a placeholder activity as stream chunks are already written in real-time.
 func ActivityWriteToLogFile(ctx context.Context, runID string, chunks []model.StreamChunk) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Writing chunks to log file", "runID", runID, "chunkCount", len(chunks))
@@ -233,6 +245,7 @@ func ActivityWriteToLogFile(ctx context.Context, runID string, chunks []model.St
 	return nil
 }
 
+// ActivityExtractMetrics parses the log file and extracts metrics from K6 test output.
 func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Extracting metrics from log file", "runID", runID)
@@ -242,7 +255,7 @@ func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, 
 		fileName = "run_unknown"
 	}
 
-	filePath := filepath.Join("results", fmt.Sprintf("%s.txt", fileName))
+	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		logger.Error("Failed to read log file", "filePath", filePath, "error", err)
@@ -328,6 +341,7 @@ func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, 
 	return metrics, nil
 }
 
+// parseMetricMessageFromLine attempts to parse a JSON metric message from a log line.
 func parseMetricMessageFromLine(message string, runID string, stream string) (model.Metric, bool) {
 	raw := strings.TrimSpace(message)
 	if raw == "" {
@@ -363,6 +377,7 @@ func parseMetricMessageFromLine(message string, runID string, stream string) (mo
 	return model.Metric{}, false
 }
 
+// ActivitySaveMetricsToDb saves extracted metrics to the database as both individual records and a summary.
 func ActivitySaveMetricsToDb(ctx context.Context, metrics []model.Metric) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Saving metrics to database", "count", len(metrics))
@@ -383,6 +398,7 @@ func ActivitySaveMetricsToDb(ctx context.Context, metrics []model.Metric) error 
 	return nil
 }
 
+// ActivitySaveRunLogFile moves the log file from disk to the database for long-term storage.
 func ActivitySaveRunLogFile(ctx context.Context, runID string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Saving run log file to database", "runID", runID)
@@ -396,6 +412,7 @@ func ActivitySaveRunLogFile(ctx context.Context, runID string) error {
 	return nil
 }
 
+// ActivityUpdateRunStatus updates the test run status in the database.
 func ActivityUpdateRunStatus(ctx context.Context, runID string, status string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Updating run status", "runID", runID, "status", status)
@@ -409,6 +426,7 @@ func ActivityUpdateRunStatus(ctx context.Context, runID string, status string) e
 	return nil
 }
 
+// toString converts any value to its string representation.
 func toString(v interface{}) string {
 	switch t := v.(type) {
 	case string:

@@ -1,7 +1,10 @@
+// Package main provides the K6 runner service that executes load test scripts.
+// It manages virtual user capacity and streams test output via HTTP Server-Sent Events.
 package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,19 +13,27 @@ import (
 	"sync"
 )
 
+// TestRequest represents a K6 test execution request.
 type TestRequest struct {
-	RunID  string `json:"run_id"`
-	VUs    int    `json:"vus"`
-	Script string `json:"script"`
+	RunID  string `json:"run_id"` // Unique identifier for the test run
+	VUs    int    `json:"vus"`    // Number of virtual users to simulate
+	Script string `json:"script"` // K6 test script to execute
 }
 
 var (
+	// currentVUs tracks the number of virtual users currently in use.
 	currentVUs = 0
-	maxVUs     = 10000
-	mu         sync.Mutex
+	// maxVUs is the maximum number of virtual users this runner can support.
+	maxVUs = 10000
+	// mu synchronizes access to currentVUs.
+	mu sync.Mutex
 )
 
+// handler processes incoming test execution requests.
+// It validates the request, manages virtual user allocation, executes K6, and streams results.
 func handler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	var req TestRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -62,7 +73,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("k6", "run",
+	cmd := exec.CommandContext(context.Background(), "k6", "run",
 		"--tag", "test_run_id="+req.RunID,
 		"-o", "experimental-prometheus-rw=http://prometheus:9090/api/v1/write",
 		"-",
@@ -106,10 +117,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			fmt.Printf(`{"type":"stdout","message":"%s"}\n`, line)
 			fmt.Fprintf(w, "data: [STDOUT] %s\n\n", line)
+			flusher.Flush()
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(w, "data: [ERROR] stdout read error: %v\n\n", err)
 			flusher.Flush()
 		}
 	}()
@@ -118,10 +134,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			fmt.Printf(`{"type":"stderr","message":"%s"}\n`, line)
 			fmt.Fprintf(w, "data: [STDERR] %s\n\n", line)
+			flusher.Flush()
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(w, "data: [ERROR] stderr read error: %v\n\n", err)
 			flusher.Flush()
 		}
 	}()
@@ -138,8 +159,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
+// main starts the runner HTTP server with test execution and health check endpoints.
 func main() {
 	http.HandleFunc("/run-test", handler)
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 
 	fmt.Println("Runner server running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

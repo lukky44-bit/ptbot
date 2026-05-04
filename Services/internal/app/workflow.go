@@ -1,3 +1,4 @@
+// Package app defines the load test workflow orchestration logic.
 package app
 
 import (
@@ -8,6 +9,14 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// LoadTestWorkflow orchestrates a complete load test execution through a series of steps:
+// 1. Create run record in database
+// 2. Initialize log file
+// 3. Execute K6 test via runner service and capture output
+// 4. Extract metrics from test output
+// 5. Save metrics to database
+// 6. Archive logs to database
+// 7. Update final status
 func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("LoadTestWorkflow started", "runID", req.RunID, "vus", req.VUs)

@@ -1,9 +1,11 @@
+// Package main provides HTTP handlers for the backend server.
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -11,14 +13,19 @@ import (
 	"backend/internal/worker"
 )
 
+// ServeRunTestWithWorkflow handles POST requests to start a load test workflow.
+// It validates the request, starts a Temporal workflow, and streams workflow status updates via SSE.
 func ServeRunTestWithWorkflow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	defer r.Body.Close()
 
 	var req model.RunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20)) // 1MB max body
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -48,38 +55,58 @@ func ServeRunTestWithWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "data: Workflow started with ID: %s\n\n", workflowID)
+	if _, err := fmt.Fprintf(w, "data: Workflow started with ID: %s\n\n", workflowID); err != nil {
+		return
+	}
 	flusher.Flush()
 
 	ctx := context.Background()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+		}
+
 		we, err := worker.DescribeWorkflowExecution(ctx, workflowID, "")
 		if err != nil {
-			fmt.Fprintf(w, "data: [ERROR] Failed to check workflow status: %v\n\n", err)
+			if _, writeErr := fmt.Fprintf(w, "data: [ERROR] Failed to check workflow status: %v\n\n", err); writeErr != nil {
+				return
+			}
 			flusher.Flush()
 			break
 		}
 
 		status := we.WorkflowExecutionInfo.Status.String()
-		fmt.Fprintf(w, "data: Workflow status: %s\n\n", status)
+		if _, err := fmt.Fprintf(w, "data: Workflow status: %s\n\n", status); err != nil {
+			return
+		}
 		flusher.Flush()
 
 		if status != "Running" {
 			if status == "COMPLETED" {
-				fmt.Fprintf(w, "data: Workflow completed successfully\n\n")
+				if _, err := fmt.Fprintf(w, "data: Workflow completed successfully\n\n"); err != nil {
+					return
+				}
 			} else if status == "FAILED" {
-				fmt.Fprintf(w, "data: [ERROR] Workflow failed\n\n")
+				if _, err := fmt.Fprintf(w, "data: [ERROR] Workflow failed\n\n"); err != nil {
+					return
+				}
 			} else {
-				fmt.Fprintf(w, "data: Workflow ended with status: %s\n\n", status)
+				if _, err := fmt.Fprintf(w, "data: Workflow ended with status: %s\n\n", status); err != nil {
+					return
+				}
 			}
 			flusher.Flush()
 			break
 		}
 	}
 
-	fmt.Fprintf(w, "data: BACKEND COMPLETED\n\n")
+	if _, err := fmt.Fprintf(w, "data: BACKEND COMPLETED\n\n"); err != nil {
+		return
+	}
 	flusher.Flush()
 }
