@@ -211,6 +211,46 @@ func SaveMetric(ctx context.Context, metric model.Metric) error {
 	return nil
 }
 
+// SaveMetricsBatch saves multiple metrics to the realtime_metrics table in a single batch INSERT.
+func SaveMetricsBatch(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	// Build the INSERT statement with multiple VALUES
+	query := `INSERT INTO realtime_metrics (run_id, name, value, ts, stream, raw) VALUES `
+	args := make([]interface{}, 0, len(metrics)*6)
+
+	for i, metric := range metrics {
+		if i > 0 {
+			query += ", "
+		}
+
+		// Parse metric value
+		var floatValue float64
+		if metric.Value != "" {
+			parts := strings.Fields(metric.Value)
+			if len(parts) > 0 {
+				value := strings.TrimSuffix(parts[0], "ms")
+				value = strings.TrimSuffix(value, "s")
+				if val, err := strconv.ParseFloat(value, 64); err == nil {
+					floatValue = val
+				}
+			}
+		}
+
+		// Add to VALUES clause
+		query += fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i*6+1, i*6+2, i*6+3, i*6+4, i*6+5, i*6+6)
+		args = append(args, metric.RunID, metric.Name, floatValue, time.Now(), metric.Stream, metric.Raw)
+	}
+
+	_, err := pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("batch save metrics: %w", err)
+	}
+	return nil
+}
+
 // CreateRun creates a new test run record in the database.
 func CreateRun(ctx context.Context, runID string, vus int, script string) error {
 	query := `

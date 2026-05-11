@@ -228,9 +228,9 @@ func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct
 				continue
 			}
 
-			for _, metric := range metrics {
-				if err := db.SaveMetric(ctx, metric); err != nil {
-					logger.Warn("Failed to save Prometheus metric", "name", metric.Name, "error", err)
+			if len(metrics) > 0 {
+				if err := db.SaveMetricsBatch(ctx, metrics); err != nil {
+					logger.Warn("Failed to save batch of Prometheus metrics", "count", len(metrics), "error", err)
 				}
 			}
 		}
@@ -409,6 +409,30 @@ func ActivitySaveRunLogFile(ctx context.Context, runID string) error {
 	}
 
 	logger.Info("Log file saved to database and removed from local disk", "runID", runID)
+	return nil
+}
+
+// ActivityCleanupLogFile removes the log file from disk (used on workflow failure to prevent orphan files).
+func ActivityCleanupLogFile(ctx context.Context, runID string) error {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Cleaning up log file on workflow failure", "runID", runID)
+
+	fileName := util.SanitizeRunID(runID)
+	if fileName == "" {
+		fileName = "run_unknown"
+	}
+
+	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
+	if err := os.Remove(filePath); err != nil {
+		if os.IsNotExist(err) {
+			logger.Info("Log file already missing", "filePath", filePath)
+			return nil
+		}
+		logger.Warn("Failed to cleanup log file", "filePath", filePath, "error", err)
+		return nil // Don't fail the workflow on cleanup errors
+	}
+
+	logger.Info("Log file cleaned up successfully", "filePath", filePath)
 	return nil
 }
 

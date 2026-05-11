@@ -10,6 +10,33 @@ services:
     networks:
       - k6net
 
+  backend:
+    build:
+      context: ./Services
+    container_name: k6-backend
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - prometheus
+      - runner
+    environment:
+      - BACKEND_PORT=8081
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=loadtest
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - TEMPORAL_SERVICE_ADDRESS=host.docker.internal:7233
+      - PROMETHEUS_HEALTH_URL=http://prometheus:9090/-/healthy
+      - PROMETHEUS_URL=http://prometheus:9090
+      - RUNNER_HEALTH_ADDR=runner:8080
+      - RUNNER_URL=http://runner:8080/run-test
+    networks:
+      - k6net
+    volumes:
+      - ./Services/results:/app/results
+
   postgres:
     image: timescale/timescaledb:latest-pg15
     container_name: postgres

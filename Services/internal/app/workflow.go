@@ -41,6 +41,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivityCreateLogFile, req.RunID).Get(ctx, nil); err != nil {
 		logger.Error("Failed to create log file", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_log_creation").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
@@ -49,6 +50,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivityCallRunner, req).Get(ctx, &runnerURL); err != nil {
 		logger.Error("Failed to call runner", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_runner_connection").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
@@ -56,6 +58,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivityProcessStream, req, runnerURL).Get(ctx, &chunks); err != nil {
 		logger.Error("Failed to process stream", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_stream_processing").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
@@ -66,6 +69,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivityExtractMetrics, req.RunID).Get(ctx, &metrics); err != nil {
 		logger.Error("Failed to extract metrics", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_metric_extraction").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
@@ -75,6 +79,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivitySaveMetricsToDb, metrics).Get(ctx, nil); err != nil {
 		logger.Error("Failed to save metrics to database", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_metrics_save").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
@@ -82,6 +87,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	if err := workflow.ExecuteActivity(ctx, ActivitySaveRunLogFile, req.RunID).Get(ctx, nil); err != nil {
 		logger.Error("Failed to save log file to database", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_log_save").Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
