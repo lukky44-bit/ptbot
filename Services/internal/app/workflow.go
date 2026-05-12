@@ -54,15 +54,15 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 		return "", err
 	}
 
-	var chunks []model.StreamChunk
-	if err := workflow.ExecuteActivity(ctx, ActivityProcessStream, req, runnerURL).Get(ctx, &chunks); err != nil {
+	var chunkCount int
+	if err := workflow.ExecuteActivity(ctx, ActivityProcessStream, req, runnerURL).Get(ctx, &chunkCount); err != nil {
 		logger.Error("Failed to process stream", "error", err)
 		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_stream_processing").Get(ctx, nil)
 		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
 
-	logger.Info("Stream processed successfully", "runID", req.RunID, "chunkCount", len(chunks))
+	logger.Info("Stream processed successfully", "runID", req.RunID, "chunkCount", chunkCount)
 
 	logger.Info("Step 4: Extracting metrics from log file", "runID", req.RunID)
 	var metrics []model.Metric

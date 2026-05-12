@@ -7,6 +7,8 @@ services:
       - "8080:8080"
     depends_on:
       - prometheus
+    environment:
+      - TZ=Asia/Kolkata
     networks:
       - k6net
 
@@ -22,6 +24,7 @@ services:
       - runner
     environment:
       - BACKEND_PORT=8081
+      - TZ=Asia/Kolkata
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=loadtest
@@ -41,6 +44,12 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: postgres
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - timezone=Asia/Kolkata
+      - -c
+      - log_timezone=Asia/Kolkata
     ports:
       - "5432:5432"
     environment:
@@ -48,6 +57,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: loadtest
       TIMESCALEDB_TELEMETRY: "off"
+      TZ: Asia/Kolkata
     volumes:
       - postgres-data:/var/lib/postgresql
     networks:

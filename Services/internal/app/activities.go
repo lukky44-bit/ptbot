@@ -90,7 +90,8 @@ func ActivityCallRunner(ctx context.Context, req model.RunRequest) (string, erro
 
 // ActivityProcessStream calls the runner service, captures streaming output, and writes it to a log file.
 // It also polls Prometheus for metrics in parallel.
-func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL string) ([]model.StreamChunk, error) {
+// It returns only a small chunk count to avoid storing large payloads in Temporal history.
+func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL string) (int, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Processing stream from runner", "runID", req.RunID)
 
@@ -104,14 +105,14 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 
 	if err := os.MkdirAll(util.ResultsDir(), 0755); err != nil {
 		logger.Error("Failed to ensure results directory", "error", err)
-		return nil, err
+		return 0, err
 	}
 
 	filePath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s.txt", fileName))
 	logFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("Failed to open log file for streaming writes", "filePath", filePath, "error", err)
-		return nil, err
+		return 0, err
 	}
 	defer logFile.Close()
 
@@ -128,13 +129,13 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 	payload, err := json.Marshal(runnerPayload)
 	if err != nil {
 		logger.Error("Failed to marshal payload", "error", err)
-		return nil, err
+		return 0, err
 	}
 
 	runnerReq, err := http.NewRequestWithContext(ctx, http.MethodPost, runnerURL, bytes.NewReader(payload))
 	if err != nil {
 		logger.Error("Failed to create request", "error", err)
-		return nil, err
+		return 0, err
 	}
 	runnerReq.Header.Set("Content-Type", "application/json")
 
@@ -142,7 +143,7 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 	resp, err := client.Do(runnerReq)
 	if err != nil {
 		logger.Error("Failed to call runner", "error", err)
-		return nil, err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
@@ -150,19 +151,19 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 		body, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("runner returned status %d", resp.StatusCode)
 		logger.Error(errMsg, "body", string(body))
-		return nil, fmt.Errorf("%s", errMsg)
+		return 0, fmt.Errorf("%s", errMsg)
 	}
 
 	go pollPrometheusMetrics(ctx, req.RunID, metricsStop)
 
-	var chunks []model.StreamChunk
+	chunkCount := 0
 	reader := bufio.NewReader(resp.Body)
 
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("Stream processing cancelled")
-			return chunks, ctx.Err()
+			return chunkCount, ctx.Err()
 		default:
 		}
 
@@ -179,19 +180,14 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 
 					if _, writeErr := logFile.WriteString(fmt.Sprintf("[%s] [%s] %s\n", req.RunID, stream, data)); writeErr != nil {
 						logger.Error("Failed to append stream chunk to log file", "filePath", filePath, "error", writeErr)
-						return chunks, writeErr
+						return chunkCount, writeErr
 					}
 					if syncErr := logFile.Sync(); syncErr != nil {
 						logger.Error("Failed to sync log file", "filePath", filePath, "error", syncErr)
-						return chunks, syncErr
+						return chunkCount, syncErr
 					}
 
-					chunk := model.StreamChunk{
-						RunID:   req.RunID,
-						Message: data,
-						Stream:  stream,
-					}
-					chunks = append(chunks, chunk)
+					chunkCount++
 				}
 			}
 		}
@@ -205,8 +201,8 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 		}
 	}
 
-	logger.Info("Stream processing completed", "chunksReceived", len(chunks))
-	return chunks, nil
+	logger.Info("Stream processing completed", "chunksReceived", chunkCount)
+	return chunkCount, nil
 }
 
 // pollPrometheusMetrics periodically queries Prometheus for metrics and saves them to the database.
@@ -235,14 +231,6 @@ func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct
 			}
 		}
 	}
-}
-
-// ActivityWriteToLogFile is a placeholder activity as stream chunks are already written in real-time.
-func ActivityWriteToLogFile(ctx context.Context, runID string, chunks []model.StreamChunk) error {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Writing chunks to log file", "runID", runID, "chunkCount", len(chunks))
-	logger.Info("Skipping duplicate batch write because stream is already appended in real time", "runID", runID)
-	return nil
 }
 
 // ActivityExtractMetrics parses the log file and extracts metrics from K6 test output.
