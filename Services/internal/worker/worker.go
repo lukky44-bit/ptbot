@@ -55,6 +55,7 @@ func InitTemporalWorker() error {
 	temporalWorker.RegisterActivity(app.ActivitySaveRunLogFile)
 	temporalWorker.RegisterActivity(app.ActivityCleanupLogFile)
 	temporalWorker.RegisterActivity(app.ActivityUpdateRunStatus)
+	temporalWorker.RegisterActivity(app.ActivityCheckIfStopping)
 
 	fmt.Println("Temporal worker initialized and activities registered")
 	return nil

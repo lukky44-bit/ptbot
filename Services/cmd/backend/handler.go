@@ -2,13 +2,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
+	"backend/internal/db"
 	"backend/internal/model"
 	"backend/internal/worker"
 )
@@ -109,4 +113,83 @@ func ServeRunTestWithWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flusher.Flush()
+}
+
+// ServeStopRun handles POST requests to stop a currently running test for a specific run ID.
+func ServeStopRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer r.Body.Close()
+
+	var req model.StopRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.RunID == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Mark run as stopping in database
+	ctx := context.Background()
+	if err := db.UpdateRunStatus(ctx, req.RunID, "stopping"); err != nil {
+		http.Error(w, fmt.Sprintf("failed to update run status: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	runnerStopURL := resolveRunnerStopURL()
+	body, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "failed to marshal stop request", http.StatusInternalServerError)
+		return
+	}
+
+	runnerReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, runnerStopURL, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "failed to create stop request", http.StatusInternalServerError)
+		return
+	}
+	runnerReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(runnerReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to call runner stop endpoint: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if len(respBody) == 0 {
+		_, _ = w.Write([]byte(`{"message":"stop request forwarded"}`))
+		return
+	}
+	_, _ = w.Write(respBody)
+}
+
+func resolveRunnerStopURL() string {
+	if stopURL := os.Getenv("RUNNER_STOP_URL"); stopURL != "" {
+		return stopURL
+	}
+
+	runnerURL := os.Getenv("RUNNER_URL")
+	if runnerURL == "" {
+		return "http://localhost:8080/stop"
+	}
+
+	parsed, err := url.Parse(runnerURL)
+	if err != nil {
+		return "http://localhost:8080/stop"
+	}
+	parsed.Path = "/stop"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }

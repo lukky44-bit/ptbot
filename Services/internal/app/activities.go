@@ -437,7 +437,25 @@ func ActivityUpdateRunStatus(ctx context.Context, runID string, status string) e
 	logger.Info("Run status updated", "runID", runID, "status", status)
 	return nil
 }
+// ActivityCheckIfStopping checks if the run was marked as stopping (stop request received)
+// Returns "stopped" if it was stopping, otherwise returns "completed"
+func ActivityCheckIfStopping(ctx context.Context, runID string) (string, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Checking if run was stopped", "runID", runID)
 
+	status, err := db.GetRunStatus(ctx, runID)
+	if err != nil {
+		logger.Error("Failed to get run status", "runID", runID, "error", err)
+		return "completed", nil // Default to completed if we can't check
+	}
+
+	if status == "stopping" {
+		logger.Info("Run was stopped by user", "runID", runID)
+		return "stopped", nil
+	}
+
+	return "completed", nil
+}
 // toString converts any value to its string representation.
 func toString(v interface{}) string {
 	switch t := v.(type) {

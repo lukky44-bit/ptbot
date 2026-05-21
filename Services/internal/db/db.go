@@ -330,6 +330,22 @@ func UpdateRunStatus(ctx context.Context, runID, status string) error {
 	return nil
 }
 
+// GetRunStatus retrieves the current status of a test run.
+func GetRunStatus(ctx context.Context, runID string) (string, error) {
+	query := `
+		SELECT status
+		FROM test_runs
+		WHERE id = $1
+	`
+
+	var status string
+	err := pool.QueryRow(ctx, query, runID).Scan(&status)
+	if err != nil {
+		return "", fmt.Errorf("get run status: %w", err)
+	}
+	return status, nil
+}
+
 // SaveSummaryMetric saves a JSON summary of all metrics for a test run.
 func SaveSummaryMetric(ctx context.Context, runID string, metrics map[string]interface{}) error {
 	payload, err := json.Marshal(metrics)

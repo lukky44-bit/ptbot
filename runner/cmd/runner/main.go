@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,6 +21,16 @@ type TestRequest struct {
 	Script string `json:"script"` // K6 test script to execute
 }
 
+// StopRequest represents a request to stop a specific running test.
+type StopRequest struct {
+	RunID string `json:"run_id"`
+}
+
+type activeRun struct {
+	cancel context.CancelFunc
+	vus    int
+}
+
 var (
 	// currentVUs tracks the number of virtual users currently in use.
 	currentVUs = 0
@@ -27,6 +38,8 @@ var (
 	maxVUs = 10000
 	// mu synchronizes access to currentVUs.
 	mu sync.Mutex
+	// activeRuns tracks running k6 processes by run ID.
+	activeRuns = make(map[string]activeRun)
 )
 
 // handler processes incoming test execution requests.
@@ -46,19 +59,30 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allocated := false
 	mu.Lock()
+	if _, exists := activeRuns[req.RunID]; exists {
+		mu.Unlock()
+		http.Error(w, "run already in progress", http.StatusConflict)
+		return
+	}
 	if currentVUs+req.VUs > maxVUs {
 		mu.Unlock()
 		http.Error(w, "container limit reached", http.StatusTooManyRequests)
 		return
 	}
 	currentVUs += req.VUs
+	allocated = true
 	fmt.Println("Allocated VUs:", req.VUs, "| Current VUs:", currentVUs)
 	mu.Unlock()
 
 	defer func() {
+		if !allocated {
+			return
+		}
 		mu.Lock()
 		currentVUs -= req.VUs
+		delete(activeRuns, req.RunID)
 		fmt.Println("Released VUs:", req.VUs, "| Current VUs:", currentVUs)
 		mu.Unlock()
 	}()
@@ -73,7 +97,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.CommandContext(context.Background(), "k6", "run",
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(runCtx, "k6", "run",
 		"--tag", "test_run_id="+req.RunID,
 		"-o", "experimental-prometheus-rw=http://prometheus:9090/api/v1/write",
 		"-",
@@ -110,6 +137,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to start k6", http.StatusInternalServerError)
 		return
 	}
+
+	mu.Lock()
+	activeRuns[req.RunID] = activeRun{cancel: cancel, vus: req.VUs}
+	mu.Unlock()
 
 	var wg sync.WaitGroup
 
@@ -159,9 +190,44 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
+// stopHandler stops a currently running test execution by run ID.
+func stopHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer r.Body.Close()
+
+	var req StopRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.RunID == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	run, exists := activeRuns[req.RunID]
+	mu.Unlock()
+
+	if !exists {
+		http.Error(w, "run not found or already finished", http.StatusNotFound)
+		return
+	}
+
+	run.cancel()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fmt.Sprintf(`{"message":"stop signal sent","run_id":"%s"}`, req.RunID)))
+}
+
 // main starts the runner HTTP server with test execution and health check endpoints.
 func main() {
 	http.HandleFunc("/run-test", handler)
+	http.HandleFunc("/stop", stopHandler)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))

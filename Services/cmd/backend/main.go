@@ -180,6 +180,7 @@ func main() {
 
 	go func() {
 		http.HandleFunc("/run-test", ServeRunTestWithWorkflow)
+		http.HandleFunc("/stop", ServeStopRun)
 		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("ok"))

@@ -11,6 +11,11 @@ type RunRequest struct {
 	RunnerURL string `json:"runner_url,omitempty"` // Optional custom runner service URL
 }
 
+// StopRequest represents a request to stop an in-flight load test run.
+type StopRequest struct {
+	RunID string `json:"run_id"` // Identifier of the run to stop
+}
+
 // StreamChunk represents a chunk of output from the test runner.
 type StreamChunk struct {
 	RunID   string // Identifier of the test run

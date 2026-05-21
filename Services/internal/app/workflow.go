@@ -2,12 +2,22 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"backend/internal/model"
 
 	"go.temporal.io/sdk/workflow"
 )
+
+// isContextCanceled checks if an error represents a context cancellation
+func isContextCanceled(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "context canceled") || strings.Contains(errMsg, "context.Canceled")
+}
 
 // LoadTestWorkflow orchestrates a complete load test execution through a series of steps:
 // 1. Create run record in database
@@ -57,7 +67,11 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	var chunkCount int
 	if err := workflow.ExecuteActivity(ctx, ActivityProcessStream, req, runnerURL).Get(ctx, &chunkCount); err != nil {
 		logger.Error("Failed to process stream", "error", err)
-		_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_stream_processing").Get(ctx, nil)
+		if isContextCanceled(err) {
+			_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "stopped").Get(ctx, nil)
+		} else {
+			_ = workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "failed_stream_processing").Get(ctx, nil)
+		}
 		_ = workflow.ExecuteActivity(ctx, ActivityCleanupLogFile, req.RunID).Get(ctx, nil)
 		return "", err
 	}
@@ -92,11 +106,19 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 	}
 
 	logger.Info("Step 7: Updating final status", "runID", req.RunID)
-	if err := workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, "completed").Get(ctx, nil); err != nil {
+	// Check if run was marked as stopping (stop request received)
+	// If so, set to stopped; otherwise set to completed
+	finalStatus := "completed"
+	if err := workflow.ExecuteActivity(ctx, ActivityCheckIfStopping, req.RunID).Get(ctx, &finalStatus); err != nil {
+		logger.Warn("Failed to check stopping status, assuming normal completion", "error", err)
+		finalStatus = "completed"
+	}
+	
+	if err := workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, finalStatus).Get(ctx, nil); err != nil {
 		logger.Error("Failed to update final status", "error", err)
 		return "", err
 	}
 
-	logger.Info("LoadTestWorkflow completed successfully", "runID", req.RunID)
+	logger.Info("LoadTestWorkflow completed successfully", "runID", req.RunID, "status", finalStatus)
 	return req.RunID, nil
 }
