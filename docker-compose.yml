@@ -9,8 +9,11 @@ services:
       - prometheus
     environment:
       - TZ=Asia/Kolkata
+      - RESULTS_DIR=/app/results
     networks:
       - k6net
+    volumes:
+      - ./Services/results:/app/results
 
   backend:
     build:
@@ -25,6 +28,7 @@ services:
     environment:
       - BACKEND_PORT=8081
       - TZ=Asia/Kolkata
+      - RESULTS_DIR=/app/results
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=loadtest

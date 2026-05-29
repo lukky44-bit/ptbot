@@ -25,10 +25,7 @@ import (
 
 // Regular expressions for parsing K6 test output and extracting metrics.
 var (
-	summaryMetricLine   = regexp.MustCompile(`^(?:[✓✗]\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\.{2,}:\s*(.+)$`)
-	thresholdHeaderLine = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\s*$`)
-	thresholdRuleLine   = regexp.MustCompile(`^[✓✗]\s*'([^']+)'\s+(.+)$`)
-	executorRegexp      = regexp.MustCompile(`executor\s*:\s*["']([^"']+)["']`)
+	executorRegexp = regexp.MustCompile(`executor\s*:\s*["']([^"']+)["']`)
 )
 
 // ActivityCreateRun creates a new test run record in the database.
@@ -140,7 +137,7 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 	}{
 		RunID:  req.RunID,
 		VUs:    req.VUs,
-		Script: req.Script,
+		Script: injectSummaryExport(req.Script, req.RunID),
 	}
 
 	payload, err := json.Marshal(runnerPayload)
@@ -222,6 +219,30 @@ func ActivityProcessStream(ctx context.Context, req model.RunRequest, runnerURL 
 	return chunkCount, nil
 }
 
+// injectSummaryExport appends a k6 handleSummary implementation so the final summary
+// is written to a JSON file in the shared results directory.
+func injectSummaryExport(script, runID string) string {
+	if strings.Contains(script, "handleSummary(") {
+		return script
+	}
+
+	fileName := util.SanitizeRunID(runID)
+	if fileName == "" {
+		fileName = "run_unknown"
+	}
+
+	summaryFile := fmt.Sprintf("%s-summary.json", fileName)
+	return script + fmt.Sprintf(`
+
+export function handleSummary(data) {
+  const summaryPath = (__ENV.RESULTS_DIR || "./results") + "/%s";
+  return {
+    [summaryPath]: JSON.stringify(data, null, 2),
+  };
+}
+`, summaryFile)
+}
+
 // pollPrometheusMetrics periodically queries Prometheus for metrics and saves them to the database.
 func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct{}) {
 	logger := activity.GetLogger(ctx)
@@ -250,7 +271,7 @@ func pollPrometheusMetrics(ctx context.Context, runID string, stop <-chan struct
 	}
 }
 
-// ActivityExtractMetrics parses the log file and extracts metrics from K6 test output.
+// ActivityExtractMetrics parses the log file and extracts metric events from K6 test output.
 func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Extracting metrics from log file", "runID", runID)
@@ -269,7 +290,6 @@ func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, 
 
 	lines := strings.Split(string(content), "\n")
 	var metrics []model.Metric
-	currentThresholdHeader := ""
 
 	for _, logLine := range lines {
 		if strings.TrimSpace(logLine) == "" {
@@ -300,45 +320,6 @@ func ActivityExtractMetrics(ctx context.Context, runID string) ([]model.Metric, 
 				metrics = append(metrics, metric)
 				continue
 			}
-		}
-
-		if m := summaryMetricLine.FindStringSubmatch(clean); len(m) == 3 {
-			metrics = append(metrics, model.Metric{
-				RunID:     runID,
-				Name:      strings.TrimSpace(m[1]),
-				Value:     strings.TrimSpace(m[2]),
-				Stream:    stream,
-				Raw:       clean,
-				CreatedAt: time.Now(),
-			})
-			continue
-		}
-
-		if m := thresholdHeaderLine.FindStringSubmatch(clean); len(m) == 2 {
-			header := strings.TrimSpace(m[1])
-			switch header {
-			case "THRESHOLDS", "HTTP", "EXECUTION", "NETWORK", "TOTAL", "RESULTS":
-				// ignore section headers
-			default:
-				currentThresholdHeader = header
-			}
-			continue
-		}
-
-		if m := thresholdRuleLine.FindStringSubmatch(clean); len(m) == 3 {
-			name := "threshold"
-			if currentThresholdHeader != "" {
-				name = "threshold_" + currentThresholdHeader + "_" + strings.TrimSpace(m[1])
-			}
-
-			metrics = append(metrics, model.Metric{
-				RunID:     runID,
-				Name:      name,
-				Value:     strings.TrimSpace(m[2]),
-				Stream:    stream,
-				Raw:       clean,
-				CreatedAt: time.Now(),
-			})
 		}
 	}
 
@@ -382,24 +363,56 @@ func parseMetricMessageFromLine(message string, runID string, stream string) (mo
 	return model.Metric{}, false
 }
 
-// ActivitySaveMetricsToDb saves extracted metrics to the database as both individual records and a summary.
+// ActivitySaveMetricsToDb saves extracted metrics to the realtime metrics table.
 func ActivitySaveMetricsToDb(ctx context.Context, metrics []model.Metric) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Saving metrics to database", "count", len(metrics))
 
-	summaryPayload := make(map[string]interface{})
-	for _, metric := range metrics {
-		summaryPayload[metric.Name] = metric.Value
-	}
-
-	if len(summaryPayload) > 0 {
-		runID := metrics[0].RunID
-		if err := db.SaveSummaryMetric(ctx, runID, summaryPayload); err != nil {
-			logger.Warn("Failed to save summary metrics payload", "error", err)
-		}
+	if err := db.SaveMetricsBatch(ctx, metrics); err != nil {
+		logger.Error("Failed to save metrics batch", "error", err)
+		return err
 	}
 
 	logger.Info("All metrics saved to database")
+	return nil
+}
+
+// ActivitySaveSummaryExport reads the k6 summary export JSON file and stores it in the database.
+func ActivitySaveSummaryExport(ctx context.Context, runID string) error {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Saving summary export to database", "runID", runID)
+
+	fileName := util.SanitizeRunID(runID)
+	if fileName == "" {
+		fileName = "run_unknown"
+	}
+
+	summaryPath := filepath.Join(util.ResultsDir(), fmt.Sprintf("%s-summary.json", fileName))
+	content, err := os.ReadFile(summaryPath)
+	if err != nil {
+		logger.Warn("Failed to read summary export file", "filePath", summaryPath, "error", err)
+		return nil
+	}
+
+	var summaryPayload map[string]interface{}
+	if err := json.Unmarshal(content, &summaryPayload); err != nil {
+		logger.Warn("Failed to parse summary export JSON", "filePath", summaryPath, "error", err)
+		return nil
+	}
+
+	if err := db.SaveSummaryMetric(ctx, runID, summaryPayload); err != nil {
+		logger.Warn("Failed to save summary export payload", "error", err)
+		// don't fail workflow on DB save error; keep file for inspection
+		return nil
+	}
+
+	// Remove the summary file after successful save
+	if err := os.Remove(summaryPath); err != nil {
+		logger.Warn("Failed to remove summary export file after saving", "filePath", summaryPath, "error", err)
+	} else {
+		logger.Info("Summary export saved and removed from disk", "runID", runID, "filePath", summaryPath)
+	}
+
 	return nil
 }
 

@@ -53,6 +53,7 @@ func InitTemporalWorker() error {
 	temporalWorker.RegisterActivity(app.ActivityExtractMetrics)
 	temporalWorker.RegisterActivity(app.ActivitySaveMetricsToDb)
 	temporalWorker.RegisterActivity(app.ActivitySaveRunLogFile)
+	temporalWorker.RegisterActivity(app.ActivitySaveSummaryExport)
 	temporalWorker.RegisterActivity(app.ActivityCleanupLogFile)
 	temporalWorker.RegisterActivity(app.ActivityUpdateRunStatus)
 	temporalWorker.RegisterActivity(app.ActivityCheckIfStopping)

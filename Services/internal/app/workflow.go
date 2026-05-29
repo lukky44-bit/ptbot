@@ -105,7 +105,12 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 		return "", err
 	}
 
-	logger.Info("Step 7: Updating final status", "runID", req.RunID)
+	logger.Info("Step 7: Saving summary export to database", "runID", req.RunID)
+	if err := workflow.ExecuteActivity(ctx, ActivitySaveSummaryExport, req.RunID).Get(ctx, nil); err != nil {
+		logger.Warn("Failed to save summary export", "error", err)
+	}
+
+	logger.Info("Step 8: Updating final status", "runID", req.RunID)
 	// Check if run was marked as stopping (stop request received)
 	// If so, set to stopped; otherwise set to completed
 	finalStatus := "completed"
@@ -113,7 +118,7 @@ func LoadTestWorkflow(ctx workflow.Context, req model.RunRequest) (string, error
 		logger.Warn("Failed to check stopping status, assuming normal completion", "error", err)
 		finalStatus = "completed"
 	}
-	
+
 	if err := workflow.ExecuteActivity(ctx, ActivityUpdateRunStatus, req.RunID, finalStatus).Get(ctx, nil); err != nil {
 		logger.Error("Failed to update final status", "error", err)
 		return "", err
