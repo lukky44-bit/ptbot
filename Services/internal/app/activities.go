@@ -28,6 +28,7 @@ var (
 	summaryMetricLine   = regexp.MustCompile(`^(?:[✓✗]\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\.{2,}:\s*(.+)$`)
 	thresholdHeaderLine = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\s*$`)
 	thresholdRuleLine   = regexp.MustCompile(`^[✓✗]\s*'([^']+)'\s+(.+)$`)
+	executorRegexp      = regexp.MustCompile(`executor\s*:\s*["']([^"']+)["']`)
 )
 
 // ActivityCreateRun creates a new test run record in the database.
@@ -35,13 +36,29 @@ func ActivityCreateRun(ctx context.Context, runID string, vus int, script string
 	logger := activity.GetLogger(ctx)
 	logger.Info("Creating run record", "runID", runID, "vus", vus)
 
-	if err := db.CreateRun(ctx, runID, vus, script); err != nil {
+	// try to parse executor from the provided k6 script
+	executor := parseExecutor(script)
+
+	if err := db.CreateRun(ctx, runID, vus, script, executor); err != nil {
 		logger.Error("Failed to create run record", "runID", runID, "error", err)
 		return err
 	}
 
 	logger.Info("Run record created", "runID", runID)
 	return nil
+}
+
+// parseExecutor tries to extract the executor type from a k6 script string.
+// It looks for patterns like: executor: "ramping-arrival-rate"
+func parseExecutor(script string) string {
+	if script == "" {
+		return ""
+	}
+	m := executorRegexp.FindStringSubmatch(script)
+	if len(m) >= 2 {
+		return m[1]
+	}
+	return ""
 }
 
 // ActivityCreateLogFile creates the log file for capturing test output.

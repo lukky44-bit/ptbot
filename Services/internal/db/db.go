@@ -104,6 +104,7 @@ func ensureSchema(ctx context.Context) error {
 			id TEXT PRIMARY KEY,
 			vus INTEGER NOT NULL,
 			script TEXT NOT NULL,
+			executor VARCHAR(100) DEFAULT '',
 			status VARCHAR(50) NOT NULL DEFAULT 'created',
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -141,6 +142,11 @@ func ensureSchema(ctx context.Context) error {
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			return err
 		}
+	}
+
+	// Ensure new columns added in migrations are present
+	if _, err := pool.Exec(ctx, `ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS executor VARCHAR(100) DEFAULT ''`); err != nil {
+		return err
 	}
 
 	indexStatements := []string{
@@ -252,12 +258,12 @@ func SaveMetricsBatch(ctx context.Context, metrics []model.Metric) error {
 }
 
 // CreateRun creates a new test run record in the database.
-func CreateRun(ctx context.Context, runID string, vus int, script string) error {
+func CreateRun(ctx context.Context, runID string, vus int, script string, executor string) error {
 	query := `
-		INSERT INTO test_runs (id, vus, script, status, created_at, updated_at, started_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO test_runs (id, vus, script, executor, status, created_at, updated_at, started_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE
-		SET status = EXCLUDED.status, updated_at = $6
+		SET status = EXCLUDED.status, updated_at = $7, executor = EXCLUDED.executor
 	`
 
 	now := time.Now()
@@ -265,6 +271,7 @@ func CreateRun(ctx context.Context, runID string, vus int, script string) error 
 		runID,
 		vus,
 		script,
+		executor,
 		"started",
 		now,
 		now,
