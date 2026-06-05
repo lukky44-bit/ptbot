@@ -202,12 +202,17 @@ func SaveMetric(ctx context.Context, metric model.Metric) error {
 		}
 	}
 
+	ts := metric.CreatedAt
+	if ts.IsZero() {
+		ts = time.Now()
+	}
+
 	_, err := pool.Exec(ctx,
 		query,
 		metric.RunID,
 		metric.Name,
 		floatValue,
-		time.Now(),
+		ts,
 		metric.Stream,
 		metric.Raw,
 	)
@@ -217,42 +222,57 @@ func SaveMetric(ctx context.Context, metric model.Metric) error {
 	return nil
 }
 
-// SaveMetricsBatch saves multiple metrics to the realtime_metrics table in a single batch INSERT.
+// SaveMetricsBatch saves multiple metrics to the realtime_metrics table in a single batch INSERT, chunked to avoid PostgreSQL placeholder limits.
 func SaveMetricsBatch(ctx context.Context, metrics []model.Metric) error {
 	if len(metrics) == 0 {
 		return nil
 	}
 
-	// Build the INSERT statement with multiple VALUES
-	query := `INSERT INTO realtime_metrics (run_id, name, value, ts, stream, raw) VALUES `
-	args := make([]interface{}, 0, len(metrics)*6)
-
-	for i, metric := range metrics {
-		if i > 0 {
-			query += ", "
+	// PostgreSQL supports up to 65,535 parameters. With 6 parameters per metric,
+	// the maximum batch size is 10,922 metrics. We chunk by 8,000 to be safe.
+	chunkSize := 8000
+	for start := 0; start < len(metrics); start += chunkSize {
+		end := start + chunkSize
+		if end > len(metrics) {
+			end = len(metrics)
 		}
+		chunk := metrics[start:end]
 
-		// Parse metric value
-		var floatValue float64
-		if metric.Value != "" {
-			parts := strings.Fields(metric.Value)
-			if len(parts) > 0 {
-				value := strings.TrimSuffix(parts[0], "ms")
-				value = strings.TrimSuffix(value, "s")
-				if val, err := strconv.ParseFloat(value, 64); err == nil {
-					floatValue = val
+		query := `INSERT INTO realtime_metrics (run_id, name, value, ts, stream, raw) VALUES `
+		args := make([]interface{}, 0, len(chunk)*6)
+
+		for i, metric := range chunk {
+			if i > 0 {
+				query += ", "
+			}
+
+			// Parse metric value
+			var floatValue float64
+			if metric.Value != "" {
+				parts := strings.Fields(metric.Value)
+				if len(parts) > 0 {
+					value := strings.TrimSuffix(parts[0], "ms")
+					value = strings.TrimSuffix(value, "s")
+					if val, err := strconv.ParseFloat(value, 64); err == nil {
+						floatValue = val
+					}
 				}
 			}
+
+			ts := metric.CreatedAt
+			if ts.IsZero() {
+				ts = time.Now()
+			}
+
+			// Add to VALUES clause
+			query += fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i*6+1, i*6+2, i*6+3, i*6+4, i*6+5, i*6+6)
+			args = append(args, metric.RunID, metric.Name, floatValue, ts, metric.Stream, metric.Raw)
 		}
 
-		// Add to VALUES clause
-		query += fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i*6+1, i*6+2, i*6+3, i*6+4, i*6+5, i*6+6)
-		args = append(args, metric.RunID, metric.Name, floatValue, time.Now(), metric.Stream, metric.Raw)
-	}
-
-	_, err := pool.Exec(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("batch save metrics: %w", err)
+		_, err := pool.Exec(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("batch save metrics chunk [%d:%d]: %w", start, end, err)
+		}
 	}
 	return nil
 }
